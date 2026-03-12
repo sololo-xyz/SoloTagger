@@ -1,2 +1,3 @@
 # SoloTagger
-SoloTagger is an LLM-based image captioning tool.
+## SoloTagger is an LLM-based image captioning tool.
+
