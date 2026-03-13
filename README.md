@@ -1,6 +1,6 @@
 # SoloTagger
 
-## Official website: sololo.xyz
+## Official website: [sololo.xyz](https://sololo.xyz/)
 
 ### SoloTagger is an LLM-based image captioning tool.
 
