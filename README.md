@@ -13,6 +13,8 @@ SoloTagger itself does **not** run the model. It relies on a third-party LLM run
 
 If you want to connect to a **remote API**, you’ll need to make a simple modification to the script to add the **API key**.
 
+**There is currently no GUI. For a simple tool like this, the command line is sufficient.**
+
 ## Installation and Usage
 ### Download
 
