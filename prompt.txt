@@ -1,0 +1,6 @@
+==Natural Language==
+Describe the image content in natural language, in no more than 200 words.
+
+
+==Tags==
+Describe the content of the image using tags.
