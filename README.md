@@ -14,6 +14,19 @@ SoloTagger itself does **not** run the model. It relies on a third-party LLM run
 If you want to connect to a **remote API**, you’ll need to make a simple modification to the script to add the **API key**.
 
 ## Installation and Usage
+### Download
+
+Clone the repository:
+
+`git clone https://github.com/sololo-xyz/SoloTagger.git`
+
+### Run
+
+Navigate to the SoloTagger directory, then start SoloTagger with:
+
+`python SoloTagger.py`
+
+So SoloTagger does not include unnecessary third-party libraries just for convenience. It has **zero external dependencies**. As long as you have Python installed, you can run it.
 
 For installation and usage details, please refer to the documentation:
 
