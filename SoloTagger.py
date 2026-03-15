@@ -1,5 +1,5 @@
 # SoloTagger v0.20 Modified | Original work by Solo | https://sololo.xyz
-# Detailed Documentation: https://sololo.xyz/article/26
+# Detailed Documentation: https://sololo.xyz/article/24
 # Update date: 20260313
 
 import os
@@ -15,6 +15,7 @@ PROMPT_FILE = "prompt.txt"
 DEFAULT_TEMPERATURE = 0.0
 IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp")
 RED = "\033[31m"
+GREEN = "\033[32m"
 YELLOW = "\033[33m"
 RESET = "\033[0m"
 
@@ -22,6 +23,17 @@ RESET = "\033[0m"
 def encode_image(path):
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode("utf-8")
+
+
+def get_image_data_url(image_path, image_base64):
+    ext = os.path.splitext(image_path)[1].lower()
+    mime_type = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+    }.get(ext, "image/jpeg")
+    return f"data:{mime_type};base64,{image_base64}"
 
 
 def enable_ansi_colors():
@@ -45,11 +57,69 @@ def print_warning(message):
     print(f"{YELLOW}{message}{RESET}")
 
 
-def pause_for_user():
+def print_success(message):
+    print(f"{GREEN}{message}{RESET}")
+
+
+def pause_for_user(message="Press Enter to exit..."):
     try:
-        input("Press Enter to continue...")
+        input(message)
     except EOFError:
         pass
+
+
+def print_completion_report(report):
+    print("\n" + "=" * 40)
+    print("Run report")
+    status = report.get("status", "Unknown")
+    if status == "Completed":
+        print_success(f"Status: {status}")
+    else:
+        print_error(f"Status: {status}")
+
+    image_folder = report.get("image_folder")
+    if image_folder:
+        print(f"Image folder: {image_folder}")
+
+    model = report.get("model")
+    if model:
+        print(f"Model: {model}")
+
+    if "total_images" in report:
+        print(f"Images found: {report['total_images']}")
+    if "pending_images" in report:
+        pending_images = report["pending_images"]
+        if pending_images > 0:
+            print_warning(f"Pending images: {pending_images}")
+        else:
+            print(f"Pending images: {pending_images}")
+    if "skipped_images" in report:
+        skipped_images = report["skipped_images"]
+        if skipped_images > 0:
+            print_warning(f"Skipped existing tags: {skipped_images}")
+        else:
+            print(f"Skipped existing tags: {skipped_images}")
+    if "success_count" in report:
+        success_count = report["success_count"]
+        if success_count > 0:
+            print_success(f"Processed successfully: {success_count}")
+        else:
+            print_error(f"Processed successfully: {success_count}")
+    if "failed_count" in report:
+        failed_count = report["failed_count"]
+        if failed_count > 0:
+            print_error(f"Failed: {failed_count}")
+        else:
+            print_success(f"Failed: {failed_count}")
+
+    message = report.get("message")
+    if message:
+        if status == "Completed":
+            print_success(message)
+        else:
+            print_error(message)
+
+    print("=" * 40)
 
 
 def load_prompts(base_dir):
@@ -198,12 +268,21 @@ def resolve_path(base_dir, maybe_relative_path):
 
 def main():
     enable_ansi_colors()
+    report = {
+        "status": "Failed",
+        "success_count": 0,
+        "failed_count": 0,
+    }
     base_dir = os.path.dirname(os.path.abspath(__file__))
     config = load_config(base_dir)
-    if config is None: return
+    if config is None:
+        report["message"] = "Configuration could not be loaded."
+        return report
 
     prompts = load_prompts(base_dir)
-    if prompts is None: return
+    if prompts is None:
+        report["message"] = "Prompt data could not be loaded."
+        return report
 
     image_folder_item = select_simple_option("image folder", config["image_folders"])
     target_model = select_model(config["models"])
@@ -212,17 +291,25 @@ def main():
     image_folder = resolve_path(base_dir, image_folder_item)
     api_url = config["API_URL"]
     prompt_text = escape_prompt_text(prompt_item["text"])
+    report["image_folder"] = image_folder
+    report["model"] = target_model
 
     if not os.path.isdir(image_folder):
         print_error(f"Error: folder does not exist: {image_folder}")
-        return
+        report["message"] = f"Folder does not exist: {image_folder}"
+        return report
 
     files = [f for f in os.listdir(image_folder) if f.lower().endswith(IMAGE_EXTENSIONS)]
     available_files = [f for f in files if not os.path.exists(os.path.join(image_folder, f"{os.path.splitext(f)[0]}.txt"))]
+    report["total_images"] = len(files)
+    report["pending_images"] = len(available_files)
+    report["skipped_images"] = len(files) - len(available_files)
 
     if not available_files:
         print_warning("No new images to process.")
-        return
+        report["status"] = "No work"
+        report["message"] = "No new images to process."
+        return report
 
     print(f"Processing {len(available_files)} images with model: {target_model}\n")
 
@@ -232,6 +319,7 @@ def main():
 
         try:
             img_base64 = encode_image(img_path)
+            image_data_url = get_image_data_url(img_path, img_base64)
 
             
             payload = {
@@ -244,7 +332,7 @@ def main():
                     {
                         "role": "user",
                         "content": [
-                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_base64}"}},
+                            {"type": "image_url", "image_url": {"url": image_data_url}},
                             {"type": "text", "text": "Please tag this image."}
                         ]
                     }
@@ -258,12 +346,30 @@ def main():
 
             with open(txt_path, "w", encoding="utf-8") as f:
                 f.write(tags)
+            report["success_count"] += 1
+            report["pending_images"] -= 1
 
         except Exception as e:
             print_error(f"Error processing {file}: {e}")
+            report["failed_count"] += 1
 
+    report["status"] = "Completed" if report["failed_count"] == 0 else "Completed with errors"
+    report["message"] = "Task completed!"
     print("\nTask completed!")
+    return report
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        report = main()
+    except Exception as e:
+        print_error(f"Unexpected error: {e}")
+        report = {
+            "status": "Failed",
+            "success_count": 0,
+            "failed_count": 0,
+            "message": f"Unexpected error: {e}",
+        }
+
+    print_completion_report(report)
+    pause_for_user()
